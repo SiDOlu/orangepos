@@ -78,12 +78,18 @@
         </div>
         
         <!-- Fallback / Camera Permission Screen -->
-        <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-800/95 text-white">
+        <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-800/95 text-white z-10">
           <i class="fa-solid fa-barcode text-4xl mb-2 text-orange-400 animate-pulse"></i>
-          <p class="text-xs text-slate-300 mb-3 max-w-[220px]">Point your phone camera at any physical store product barcode to scan.</p>
-          <button onclick="startCamera()" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95">
-            <i class="fa-solid fa-video"></i> Activate Live Camera
-          </button>
+          <p class="text-xs text-slate-300 mb-3 max-w-[220px]">Point your camera at any barcode or test with quick sample buttons below.</p>
+          <div class="flex flex-col gap-2 w-full max-w-[200px]">
+            <button id="activate-cam-btn" onclick="startCamera()" class="px-4 py-2.5 bg-orange-600 hover:bg-orange-500 text-xs font-bold rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95 text-white">
+              <i class="fa-solid fa-video"></i> Activate Live Camera
+            </button>
+            <label class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-xs font-semibold rounded-xl transition flex items-center justify-center gap-2 cursor-pointer text-slate-200">
+              <i class="fa-solid fa-upload"></i> Scan Barcode Image
+              <input type="file" id="qr-input-file" accept="image/*" onchange="scanImageFile(this)" class="hidden">
+            </label>
+          </div>
         </div>
       </div>
 
@@ -240,85 +246,101 @@
     let scanCooldown = false;
     let torchOn = false;
 
-    // Start Live Barcode Reader Camera Stream
-    function startCamera() {
+    // Start Live Barcode Reader Camera Stream with Multi-Tier Fallbacks
+    async function startCamera() {
       const placeholder = document.getElementById('scanner-placeholder');
       const reticle = document.getElementById('scanner-reticle');
+      const btn = document.getElementById('activate-cam-btn');
       
       if (!window.Html5Qrcode) {
-        showToast("Barcode library loading... please try again.", "error");
+        showToast("Scanner library is initializing, please try again...", "info");
         return;
       }
 
-      if (html5QrCode) {
-        // If already initialized, avoid duplication
-        return;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Requesting Camera...`;
       }
 
-      html5QrCode = new Html5Qrcode("reader");
-      
-      // Optimized scanner configuration for mobile camera autofocus and rapid 1D barcode decoding
-      const config = { 
-        fps: 20, 
-        qrbox: function(viewfinderWidth, viewfinderHeight) {
-          // Dynamic reticle matching wider 1D grocery barcodes
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      }
+
+      const scannerConfig = { 
+        fps: 15, 
+        qrbox: function(w, h) {
           return {
-            width: Math.min(viewfinderWidth * 0.85, 320),
-            height: Math.min(viewfinderHeight * 0.45, 140)
+            width: Math.min(w * 0.85, 300),
+            height: Math.min(h * 0.45, 130)
           };
         },
-        aspectRatio: 1.333,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        },
-        formatsToSupport: [ 
-          Html5QrcodeSupportedFormats.EAN_13, 
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39
-        ]
+        aspectRatio: 1.333
       };
 
-      // Request ideal camera constraints with continuous focus mode enabled
-      const cameraConstraints = {
-        facingMode: "environment",
-        focusMode: "continuous",
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      };
-
-      html5QrCode.start(
-        cameraConstraints,
-        config,
-        onBarcodeScanned,
-        onScanFailure
-      ).then(() => {
-        placeholder.classList.add('hidden');
-        if (reticle) reticle.classList.remove('hidden');
-        checkTorchSupport();
-        showToast("Live Camera Active - Ready to Scan", "success");
-      }).catch(err => {
-        console.warn("Camera start with advanced constraints failed, trying fallback mode...", err);
-        // Fallback start with basic environmental facing mode
-        html5QrCode.start(
+      // Tier 1: Try environment facing camera mode directly
+      try {
+        await html5QrCode.start(
           { facingMode: "environment" },
-          config,
+          scannerConfig,
           onBarcodeScanned,
           onScanFailure
-        ).then(() => {
-          placeholder.classList.add('hidden');
-          if (reticle) reticle.classList.remove('hidden');
-          checkTorchSupport();
-          showToast("Live Camera Active", "success");
-        }).catch(err2 => {
-          console.error("Camera access failed:", err2);
-          placeholder.classList.remove('hidden');
-          if (reticle) reticle.classList.add('hidden');
-          showToast("Camera access required or click quick samples below", "info");
-        });
-      });
+        );
+        onCameraSuccess();
+        return;
+      } catch (err1) {
+        console.warn("Direct environment camera start failed, trying device enumeration...", err1);
+      }
+
+      // Tier 2: Try enumerated back cameras
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          // Find back camera if possible, or fall back to first device
+          const backCam = devices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear')) || devices[0];
+          await html5QrCode.start(
+            backCam.id,
+            scannerConfig,
+            onBarcodeScanned,
+            onScanFailure
+          );
+          onCameraSuccess();
+          return;
+        }
+      } catch (err2) {
+        console.error("Camera enumeration failed:", err2);
+      }
+
+      // If all tiers fail
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-video"></i> Try Again`;
+      }
+      showToast("Camera permission denied or unavailable. Use quick sample buttons or upload an image.", "error");
+    }
+
+    function onCameraSuccess() {
+      document.getElementById('scanner-placeholder').classList.add('hidden');
+      const reticle = document.getElementById('scanner-reticle');
+      if (reticle) reticle.classList.remove('hidden');
+      checkTorchSupport();
+      showToast("Camera Active - Ready to Scan", "success");
+    }
+
+    // Scan static image file fallback
+    function scanImageFile(input) {
+      if (input.files && input.files.length > 0) {
+        const imageFile = input.files[0];
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader");
+        }
+        html5QrCode.scanFile(imageFile, true)
+          .then(decodedText => {
+            onBarcodeScanned(decodedText);
+          })
+          .catch(err => {
+            showToast("Could not detect a clear barcode in this image.", "error");
+          });
+      }
     }
 
     function onBarcodeScanned(decodedText) {
