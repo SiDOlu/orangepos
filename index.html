@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OrangePOS - Supermarket Floor Scanner & Mobile Checkout</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- HTML5 QR / Barcode Scanner Library -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    #reader video {
+      object-fit: cover;
+      border-radius: 0.75rem;
+      width: 100% !important;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background-color: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex flex-col justify-between">
+
+  <!-- Header / Navigation Bar -->
+  <header class="bg-orange-600 text-white shadow-md sticky top-0 z-40">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center font-black text-lg">
+          <i class="fa-solid fa-citrus text-orange-200"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight">OrangePOS</h1>
+          <p class="text-[11px] text-orange-100">Supermarket Floor Terminal</p>
+        </div>
+      </div>
+      <span class="bg-orange-700/80 text-orange-100 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-orange-500/30 flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Terminal Active
+      </span>
+    </div>
+  </header>
+
+  <!-- Main View Area -->
+  <main class="max-w-md mx-auto w-full flex-1 p-4 flex flex-col space-y-4">
+
+    <!-- Camera Scanner Card -->
+    <div class="bg-white rounded-2xl shadow-sm p-3 border border-slate-200 flex flex-col space-y-3">
+      <div class="flex items-center justify-between text-xs px-1">
+        <span class="font-semibold text-slate-700 flex items-center gap-1.5">
+          <i class="fa-solid fa-camera text-orange-600"></i> Barcode Scanner
+        </span>
+        <div class="flex items-center space-x-2">
+          <button id="torch-btn" onclick="toggleTorch()" class="hidden px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-medium transition">
+            <i class="fa-solid fa-bolt"></i> Torch
+          </button>
+          <span id="scan-status" class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">Ready</span>
+        </div>
+      </div>
+
+      <!-- Live Camera Viewport -->
+      <div class="relative bg-slate-900 rounded-xl overflow-hidden min-h-[160px] flex items-center justify-center">
+        <div id="reader" class="w-full"></div>
+        
+        <!-- Fallback / Camera Placeholder -->
+        <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-800/90 text-white">
+          <i class="fa-solid fa-barcode text-3xl mb-2 text-orange-400 animate-pulse"></i>
+          <p class="text-xs text-slate-300 mb-3">Camera permission or rear camera start required.</p>
+          <button onclick="startCamera()" class="px-3.5 py-1.5 bg-orange-600 text-xs font-semibold rounded-lg shadow hover:bg-orange-500 transition mb-2">
+            Start Rear Camera
+          </button>
+        </div>
+      </div>
+
+      <!-- Demo Barcode Quick Taps -->
+      <div class="border-t border-slate-100 pt-2">
+        <p class="text-[10px] text-slate-400 font-medium mb-1.5 uppercase tracking-wider text-center">Tap to simulate item barcode scan:</p>
+        <div class="grid grid-cols-3 gap-1.5">
+          <button onclick="simulateScan('5000159461122')" class="text-left p-1.5 border border-slate-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition">
+            <div class="flex items-center space-x-1.5 mb-1">
+              <img src="https://images.unsplash.com/photo-1552767059-ce182eadfac balance?auto=format&fit=crop&w=80&q=80" onerror="this.src='https://placehold.co/40x40/f97316/ffffff?text=Cheese'" class="w-6 h-6 object-cover rounded">
+              <p class="text-[11px] font-bold text-slate-800 truncate">Cheddar Cheese</p>
+            </div>
+            <p class="text-[9px] text-slate-500">£3.50 · 5000159461122</p>
+          </button>
+          
+          <button onclick="simulateScan('5060088700012')" class="text-left p-1.5 border border-slate-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition">
+            <div class="flex items-center space-x-1.5 mb-1">
+              <img src="https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=80&q=80" onerror="this.src='https://placehold.co/40x40/f97316/ffffff?text=Milk'" class="w-6 h-6 object-cover rounded">
+              <p class="text-[11px] font-bold text-slate-800 truncate">Whole Milk 2L</p>
+            </div>
+            <p class="text-[9px] text-slate-500">£1.45 · 5060088700012</p>
+          </button>
+
+          <button onclick="simulateScan('5010029000016')" class="text-left p-1.5 border border-slate-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition">
+            <div class="flex items-center space-x-1.5 mb-1">
+              <img src="https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=80&q=80" onerror="this.src='https://placehold.co/40x40/f97316/ffffff?text=Bread'" class="w-6 h-6 object-cover rounded">
+              <p class="text-[11px] font-bold text-slate-800 truncate">Sliced Bread 800g</p>
+            </div>
+            <p class="text-[9px] text-slate-500">£1.20 · 5010029000016</p>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Active Shopping Cart Area -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
+      <div class="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <i class="fa-solid fa-basket-shopping text-orange-600 text-sm"></i>
+          <span class="font-bold text-xs text-slate-800 uppercase tracking-wider">Current Cart</span>
+        </div>
+        <span id="cart-item-count" class="bg-slate-200 text-slate-700 text-[11px] font-bold px-2 py-0.5 rounded-full">0 items</span>
+      </div>
+
+      <!-- Cart Items List -->
+      <div id="cart-list" class="flex-1 p-3 space-y-2 overflow-y-auto max-h-[220px] custom-scroll">
+        <div id="empty-cart-msg" class="py-8 text-center text-slate-400">
+          <i class="fa-solid fa-cart-flatbed text-3xl mb-1 text-slate-300"></i>
+          <p class="text-xs">No items scanned into cart yet.</p>
+        </div>
+      </div>
+
+      <!-- Cart Summary & Checkout -->
+      <div class="p-3 bg-slate-50 border-t border-slate-200 space-y-2">
+        <div class="space-y-1 text-xs">
+          <div class="flex justify-between text-slate-500">
+            <span>Subtotal</span>
+            <span id="summary-subtotal">£0.00</span>
+          </div>
+          <div class="flex justify-between text-slate-500">
+            <span>Estimated VAT (20% on taxable items)</span>
+            <span id="summary-vat">£0.00</span>
+          </div>
+          <div class="flex justify-between font-bold text-base text-slate-900 pt-1 border-t border-slate-200">
+            <span>Total</span>
+            <span id="summary-total" class="text-orange-600">£0.00</span>
+          </div>
+        </div>
+
+        <!-- Apple Pay Checkout Button -->
+        <button id="apple-pay-btn" onclick="triggerApplePayCheckout()" disabled class="w-full bg-black disabled:opacity-50 text-white rounded-xl py-3 px-4 font-semibold text-sm flex items-center justify-center space-x-2 shadow-md hover:bg-slate-900 transition active:scale-[0.98]">
+          <i class="fa-brands fa-apple text-lg"></i>
+          <span>Pay with Apple Pay</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Notification Banner / Toast Alert -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 opacity-0 translate-y-4 pointer-events-none max-w-xs w-full px-4">
+    <div id="toast-body" class="bg-slate-900 text-white text-xs py-2.5 px-4 rounded-xl shadow-lg flex items-center justify-between space-x-2">
+      <span id="toast-message">Notification</span>
+      <i id="toast-icon" class="fa-solid fa-circle-check text-orange-400"></i>
+    </div>
+  </div>
+
+  <!-- Simulated Apple Pay Modal Sheet -->
+  <div id="apple-pay-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white w-full max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden p-5 space-y-4 transform transition-all">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-1.5 text-slate-900">
+          <i class="fa-brands fa-apple text-xl"></i>
+          <span class="font-bold text-sm">Apple Pay</span>
+        </div>
+        <button onclick="closeApplePayModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="flex justify-between py-1 border-b border-slate-50">
+          <span class="text-slate-500">Merchant</span>
+          <span class="font-semibold text-slate-800">OrangePOS Express Store</span>
+        </div>
+        <div class="flex justify-between py-1 border-b border-slate-50">
+          <span class="text-slate-500">Card</span>
+          <span class="font-semibold text-slate-800">Visa ending in •••• 8812</span>
+        </div>
+        <div class="flex justify-between py-1 text-sm font-bold text-slate-900 pt-1">
+          <span>Amount</span>
+          <span id="modal-apple-pay-amount">£0.00</span>
+        </div>
+      </div>
+
+      <div class="text-center py-3">
+        <div class="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-2 text-slate-700 animate-pulse">
+          <i class="fa-solid fa-fingerprint text-2xl text-orange-600"></i>
+        </div>
+        <p class="text-xs text-slate-600 font-medium">Double Click Side Button or hold Face ID to Pay</p>
+      </div>
+
+      <button onclick="confirmSimulatedPayment()" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl shadow transition">
+        Authorize Payment (£<span id="btn-pay-amount">0.00</span>)
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- DEMO STOCK PRODUCT CATALOG ---
+    const PRODUCT_CATALOG = {
+      "5000159461122": { 
+        id: 101, 
+        name: "Cheddar Cheese 350g", 
+        price: 3.50, 
+        taxable: false,
+        img: "https://images.unsplash.com/photo-1552767059-ce182eadfac balance?auto=format&fit=crop&w=120&q=80" 
+      },
+      "5060088700012": { 
+        id: 102, 
+        name: "Whole Milk 2L", 
+        price: 1.45, 
+        taxable: false,
+        img: "https://images.unsplash.com/photo-1550583724-b2692b85b150?auto=format&fit=crop&w=120&q=80" 
+      },
+      "5010029000016": { 
+        id: 103, 
+        name: "Sliced Bread 800g", 
+        price: 1.20, 
+        taxable: false,
+        img: "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=120&q=80" 
+      },
+      "5000119001423": { 
+        id: 104, 
+        name: "Sparkling Cola 1.25L", 
+        price: 1.85, 
+        taxable: true,
+        img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=120&q=80" 
+      }
+    };
+
+    // Global Cart State
+    let cart = [];
+    let html5QrCode = null;
+    let scanCooldown = false;
+    let torchOn = false;
+
+    // Start Barcode Reader Camera Stream
+    function startCamera() {
+      const placeholder = document.getElementById('scanner-placeholder');
+      
+      if (!window.Html5Qrcode) {
+        console.warn("Html5Qrcode library not loaded");
+        return;
+      }
+
+      html5QrCode = new Html5Qrcode("reader");
+      
+      const config = { 
+        fps: 10, 
+        qrbox: { width: 220, height: 90 },
+        formatsToSupport: [ 
+          Html5QrcodeSupportedFormats.EAN_13, 
+          Html5QrcodeSupportedFormats.UPC_A 
+        ]
+      };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onBarcodeScanned,
+        onScanFailure
+      ).then(() => {
+        placeholder.classList.add('hidden');
+        checkTorchSupport();
+      }).catch(err => {
+        console.warn("Camera start failed, fallback to manual demo buttons", err);
+        placeholder.classList.remove('hidden');
+      });
+    }
+
+    function onBarcodeScanned(decodedText) {
+      if (scanCooldown) return;
+      
+      scanCooldown = true;
+      document.getElementById('scan-status').innerText = 'Scanned!';
+      document.getElementById('scan-status').className = 'bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase';
+
+      playBeepSound();
+      processBarcode(decodedText);
+
+      // Lock cooldown (1.2 seconds) to avoid duplicate consecutive reads
+      setTimeout(() => {
+        scanCooldown = false;
+        document.getElementById('scan-status').innerText = 'Ready';
+        document.getElementById('scan-status').className = 'bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase';
+      }, 1200);
+    }
+
+    function onScanFailure(error) {
+      // Quietly ignore frame decode misses
+    }
+
+    function simulateScan(barcode) {
+      onBarcodeScanned(barcode);
+    }
+
+    function checkTorchSupport() {
+      try {
+        const track = html5QrCode.getRunningTrack();
+        const capabilities = track.getCapabilities();
+        if (capabilities.torch) {
+          document.getElementById('torch-btn').classList.remove('hidden');
+        }
+      } catch (e) {}
+    }
+
+    function toggleTorch() {
+      if (!html5QrCode) return;
+      torchOn = !torchOn;
+      html5QrCode.applyVideoConstraints({
+        advanced: [{ torch: torchOn }]
+      }).then(() => {
+        const torchBtn = document.getElementById('torch-btn');
+        torchBtn.classList.toggle('bg-amber-100', torchOn);
+        torchBtn.classList.toggle('text-amber-800', torchOn);
+      });
+    }
+
+    // Process Barcode Lookup
+    function processBarcode(code) {
+      const product = PRODUCT_CATALOG[code];
+      if (product) {
+        addToCart(product);
+        showToast(`Added: ${product.name}`, 'success');
+      } else {
+        showToast(`Barcode ${code} not in database`, 'error');
+      }
+    }
+
+    function addToCart(product) {
+      const existing = cart.find(item => item.id === product.id);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        cart.push({
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          taxable: product.taxable,
+          img: product.img,
+          quantity: 1
+        });
+      }
+      updateCartUI();
+    }
+
+    function changeQuantity(productId, delta) {
+      const item = cart.find(i => i.id === productId);
+      if (!item) return;
+
+      item.quantity += delta;
+      if (item.quantity <= 0) {
+        cart = cart.filter(i => i.id !== productId);
+      }
+      updateCartUI();
+    }
+
+    function removeItem(productId) {
+      cart = cart.filter(i => i.id !== productId);
+      updateCartUI();
+      showToast('Item removed from cart', 'info');
+    }
+
+    function updateCartUI() {
+      const cartList = document.getElementById('cart-list');
+      const emptyMsg = document.getElementById('empty-cart-msg');
+      const itemCountBadge = document.getElementById('cart-item-count');
+      const applePayBtn = document.getElementById('apple-pay-btn');
+
+      if (cart.length === 0) {
+        cartList.innerHTML = '';
+        cartList.appendChild(emptyMsg);
+        itemCountBadge.innerText = '0 items';
+        document.getElementById('summary-subtotal').innerText = '£0.00';
+        document.getElementById('summary-vat').innerText = '£0.00';
+        document.getElementById('summary-total').innerText = '£0.00';
+        applePayBtn.disabled = true;
+        return;
+      }
+
+      let totalItems = 0;
+      let subtotal = 0;
+      let vatTotal = 0;
+
+      cartList.innerHTML = '';
+
+      cart.forEach(item => {
+        totalItems += item.quantity;
+        const lineTotal = item.price * item.quantity;
+        subtotal += lineTotal;
+        if (item.taxable) vatTotal += lineTotal * 0.20;
+
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs';
+        row.innerHTML = `
+          <div class="flex items-center space-x-2.5 flex-1 pr-2">
+            <img src="${item.img}" onerror="this.src='https://placehold.co/40x40/f97316/ffffff?text=Item'" class="w-9 h-9 object-cover rounded-lg border border-slate-200">
+            <div>
+              <p class="font-bold text-slate-800">${item.name}</p>
+              <p class="text-[10px] text-slate-500">£${item.price.toFixed(2)} each</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <div class="flex items-center bg-white border border-slate-200 rounded-lg">
+              <button onclick="changeQuantity(${item.id}, -1)" class="px-2 py-0.5 text-slate-600 hover:bg-slate-100 rounded-l-lg font-bold">-</button>
+              <span class="px-2 font-semibold text-slate-800 text-[11px]">${item.quantity}</span>
+              <button onclick="changeQuantity(${item.id}, 1)" class="px-2 py-0.5 text-slate-600 hover:bg-slate-100 rounded-r-lg font-bold">+</button>
+            </div>
+            <span class="font-bold text-slate-900 w-12 text-right">£${lineTotal.toFixed(2)}</span>
+            <button onclick="removeItem(${item.id})" class="text-rose-500 hover:text-rose-700 px-1"><i class="fa-solid fa-trash-can"></i></button>
+          </div>
+        `;
+        cartList.appendChild(row);
+      });
+
+      const grandTotal = subtotal + vatTotal;
+
+      itemCountBadge.innerText = `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+      document.getElementById('summary-subtotal').innerText = `£${subtotal.toFixed(2)}`;
+      document.getElementById('summary-vat').innerText = `£${vatTotal.toFixed(2)}`;
+      document.getElementById('summary-total').innerText = `£${grandTotal.toFixed(2)}`;
+
+      applePayBtn.disabled = false;
+    }
+
+    // Payment Sheet Modal
+    function triggerApplePayCheckout() {
+      if (cart.length === 0) return;
+      
+      const totalText = document.getElementById('summary-total').innerText;
+      document.getElementById('modal-apple-pay-amount').innerText = totalText;
+      document.getElementById('btn-pay-amount').innerText = totalText.replace('£', '');
+      
+      document.getElementById('apple-pay-modal').classList.remove('hidden');
+    }
+
+    function closeApplePayModal() {
+      document.getElementById('apple-pay-modal').classList.add('hidden');
+    }
+
+    function confirmSimulatedPayment() {
+      closeApplePayModal();
+      showToast('Payment Successful! Cart cleared.', 'success');
+      playSuccessSound();
+
+      // Reset Cart state
+      cart = [];
+      updateCartUI();
+    }
+
+    // Sound and Notification Feedback
+    function playBeepSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1000, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } catch (e) {}
+    }
+
+    function playSuccessSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+      } catch (e) {}
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.innerText = message;
+      if (type === 'error') {
+        toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400';
+      } else if (type === 'success') {
+        toastIcon.className = 'fa-solid fa-circle-check text-orange-400';
+      } else {
+        toastIcon.className = 'fa-solid fa-circle-info text-sky-400';
+      }
+
+      toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+      }, 2200);
+    }
+
+    // Auto start rear camera on window load
+    window.onload = function() {
+      startCamera();
+    };
+  </script>
+</body>
+</html>
