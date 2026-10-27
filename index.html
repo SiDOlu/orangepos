@@ -66,30 +66,30 @@
       </div>
 
       <!-- Live Camera Viewport -->
-      <div class="relative bg-slate-900 rounded-xl overflow-hidden min-h-[160px] flex items-center justify-center">
+      <div class="relative bg-slate-900 rounded-xl overflow-hidden min-h-[220px] flex items-center justify-center">
         <div id="reader" class="w-full"></div>
         
-        <!-- Fallback / Camera Placeholder -->
-        <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-800/90 text-white">
-          <i class="fa-solid fa-barcode text-3xl mb-2 text-orange-400 animate-pulse"></i>
-          <p class="text-xs text-slate-300 mb-3">Camera permission or rear camera start required.</p>
-          <button onclick="startCamera()" class="px-3.5 py-1.5 bg-orange-600 text-xs font-semibold rounded-lg shadow hover:bg-orange-500 transition mb-2">
-            Start Rear Camera
+        <!-- Live Scanning Target Reticle Overlay -->
+        <div id="scanner-reticle" class="absolute inset-0 pointer-events-none hidden flex flex-col items-center justify-center">
+          <div class="w-48 h-24 border-2 border-orange-500 rounded-xl relative shadow-[0_0_15px_rgba(249,115,22,0.5)]">
+            <div class="absolute inset-x-2 top-1/2 -translate-y-1/2 h-0.5 bg-rose-500/80 animate-pulse"></div>
+          </div>
+          <span class="mt-2 text-[10px] text-white/90 bg-black/60 px-2.5 py-0.5 rounded-full backdrop-blur-sm font-mono">Align EAN-13 / UPC Barcode</span>
+        </div>
+        
+        <!-- Fallback / Camera Permission Screen -->
+        <div id="scanner-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-slate-800/95 text-white">
+          <i class="fa-solid fa-barcode text-4xl mb-2 text-orange-400 animate-pulse"></i>
+          <p class="text-xs text-slate-300 mb-3 max-w-[220px]">Point your phone camera at any physical store product barcode to scan.</p>
+          <button onclick="startCamera()" class="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-xs font-bold rounded-xl shadow-lg transition flex items-center gap-2 active:scale-95">
+            <i class="fa-solid fa-video"></i> Activate Live Camera
           </button>
         </div>
       </div>
 
       <!-- Demo Barcode Quick Taps -->
       <div class="border-t border-slate-100 pt-2">
-        <p class="text-[10px] text-slate-400 font-medium mb-1.5 uppercase tracking-wider text-center">Tap to simulate item barcode scan:</p>
-        <div class="grid grid-cols-3 gap-1.5">
-          <button onclick="simulateScan('5000159461122')" class="text-left p-1.5 border border-slate-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition">
-            <div class="flex items-center space-x-1.5 mb-1">
-              <img src="https://images.unsplash.com/photo-1552767059-ce182eadfac balance?auto=format&fit=crop&w=80&q=80" onerror="this.src='https://placehold.co/40x40/f97316/ffffff?text=Cheese'" class="w-6 h-6 object-cover rounded">
-              <p class="text-[11px] font-bold text-slate-800 truncate">Cheddar Cheese</p>
-            </div>
-            <p class="text-[9px] text-slate-500">£3.50 · 5000159461122</p>
-          </button>
+        <p class="text-[10px] text-slate-400 font-medium mb-1.5 uppercase tracking-wider text-center">Or test with physical barcode samples / Quick Taps:</p>
           
           <button onclick="simulateScan('5060088700012')" class="text-left p-1.5 border border-slate-200 rounded-lg hover:bg-orange-50 hover:border-orange-300 transition">
             <div class="flex items-center space-x-1.5 mb-1">
@@ -240,23 +240,33 @@
     let scanCooldown = false;
     let torchOn = false;
 
-    // Start Barcode Reader Camera Stream
+    // Start Live Barcode Reader Camera Stream
     function startCamera() {
       const placeholder = document.getElementById('scanner-placeholder');
+      const reticle = document.getElementById('scanner-reticle');
       
       if (!window.Html5Qrcode) {
-        console.warn("Html5Qrcode library not loaded");
+        showToast("Barcode library loading... please try again.", "error");
+        return;
+      }
+
+      if (html5QrCode) {
+        // If already initialized, avoid duplication
         return;
       }
 
       html5QrCode = new Html5Qrcode("reader");
       
       const config = { 
-        fps: 10, 
-        qrbox: { width: 220, height: 90 },
+        fps: 15, 
+        qrbox: { width: 240, height: 110 },
+        aspectRatio: 1.5,
         formatsToSupport: [ 
           Html5QrcodeSupportedFormats.EAN_13, 
-          Html5QrcodeSupportedFormats.UPC_A 
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128
         ]
       };
 
@@ -267,10 +277,14 @@
         onScanFailure
       ).then(() => {
         placeholder.classList.add('hidden');
+        if (reticle) reticle.classList.remove('hidden');
         checkTorchSupport();
+        showToast("Live Camera Active", "success");
       }).catch(err => {
-        console.warn("Camera start failed, fallback to manual demo buttons", err);
+        console.warn("Camera access denied or unverified context:", err);
         placeholder.classList.remove('hidden');
+        if (reticle) reticle.classList.add('hidden');
+        showToast("Camera permission required or tap buttons below", "info");
       });
     }
 
@@ -284,16 +298,16 @@
       playBeepSound();
       processBarcode(decodedText);
 
-      // Lock cooldown (1.2 seconds) to avoid duplicate consecutive reads
+      // Lock cooldown (1.4 seconds) to avoid duplicate continuous reads of the same item
       setTimeout(() => {
         scanCooldown = false;
         document.getElementById('scan-status').innerText = 'Ready';
         document.getElementById('scan-status').className = 'bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase';
-      }, 1200);
+      }, 1400);
     }
 
     function onScanFailure(error) {
-      // Quietly ignore frame decode misses
+      // Quietly ignore frame decode misses during continuous video feed
     }
 
     function simulateScan(barcode) {
@@ -327,9 +341,18 @@
       const product = PRODUCT_CATALOG[code];
       if (product) {
         addToCart(product);
-        showToast(`Added: ${product.name}`, 'success');
+        showToast(`Scanned: ${product.name}`, 'success');
       } else {
-        showToast(`Barcode ${code} not in database`, 'error');
+        // Fallback for real-world barcodes scanned that aren't in the demo dataset
+        const demoItem = {
+          id: Date.now(),
+          name: `Scanned Item (${code.slice(-4)})`,
+          price: 2.99,
+          taxable: false,
+          img: "https://placehold.co/80x80/f97316/ffffff?text=Item"
+        };
+        addToCart(demoItem);
+        showToast(`Item ${code} added to cart!`, 'success');
       }
     }
 
